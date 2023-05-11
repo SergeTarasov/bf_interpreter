@@ -1,3 +1,3 @@
-Dead simple not optimised bf interpreter. 
+Dead simple bf interpreter. 
 
-mandelbrot.b execution time is about 72 seconds.
+mandelbrot.b execution time is about 33 seconds.
