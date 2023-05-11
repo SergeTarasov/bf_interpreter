@@ -2,7 +2,7 @@
 #include <string.h>
 
 enum opcodes {
-    OP_ZERO,
+    OP_ZERO,     // "[-]": write 0 to current cell
     OP_DP_INCR,  // '>': increase data pointer
     OP_DP_DECR,  // '<': decrease data pointer
     OP_VAL_INCR, // '+': increase value in data cell
@@ -34,6 +34,26 @@ typedef struct {
 int max(int a, int b) {
     return a > b ? a : b;
 }
+
+/* optimisations todo:
+ *    expr           regex                  meaning
+ * 1. [-]            \[\-\d\]               cell to zero
+ * 2. [->+<]         \[\-\d\>\d+\+\d\<\d+]  add cell to the next cell
+ * 3. [->-<]         \[\-\d\>\d+\-\d\<\d+]  subtract cell from the next cell
+ * 4. [-<+>]         \[\-\d\<\d+\+\d\>\d+]  add cell to the previous cell
+ * 5. [-<->]         \[\-\d\<\d+\-\d\>\d+]  subtract cell from the previous cell
+ * this could be done by adding 2 new opcodes to the virtual machine:
+ * OP_CELL_INCR and OP_CELL_DECR, parameter should contain a link to the target cell
+ * when executed, value in the current cell added to/subtracted from the target cell, then current cell is assigned 0
+ * full regex: \[[-+]\d+[<>]\d+[-+]\d+[<>]\d+\]
+ * full regex for bf code: \[[-+]+[<>]+[-+]+[<>]+\]
+ * all of these need additional
+ *
+ * code compilation pipeline todo
+ * 1. remove comments
+ * 2. generate "pseudocode": a sequence of commands in format <command: operand>
+ * 3.
+ * */
 
 void compile(BrainFuck *vm) {
 
@@ -114,8 +134,16 @@ void compile(BrainFuck *vm) {
                 vm->bytecode[bytecode_pointer].instruction = OP_GETCHAR;
                 break;
             case '[': {
-                vm->bytecode[bytecode_pointer].instruction = OP_LP_START;
-                vm->bytecode[bytecode_pointer].parameter = 0;
+                // "[-]" thing
+                if (vm->instruction_pointer + 2 < vm->code_len
+                & vm->code[vm->instruction_pointer + 1] == '-'
+                & vm->code[vm->instruction_pointer + 2] == ']') {
+                    vm->bytecode[bytecode_pointer].instruction = OP_ZERO;
+                    vm->instruction_pointer += 2;
+                } else {
+                    vm->bytecode[bytecode_pointer].instruction = OP_LP_START;
+                    vm->bytecode[bytecode_pointer].parameter = 0;
+                }
             }
                 break;
             case ']': {
@@ -172,23 +200,24 @@ void execute(BrainFuck *vm) {
             case OP_VAL_DECR:
                 vm->memory[vm->data_pointer] -= instr.parameter;
                 break;
+            case OP_ZERO:
+                vm->memory[vm->data_pointer] = 0;
+                break;
             case OP_PUTCHAR:
                 putchar(vm->memory[vm->data_pointer]);
                 break;
             case OP_GETCHAR:
                 vm->memory[vm->data_pointer] = getchar();
                 break;
-            case OP_LP_START: {
+            case OP_LP_START:
                 if (vm->memory[vm->data_pointer] == 0)
                     // go to loop end
                     vm->instruction_pointer = instr.parameter;
-            }
                 break;
-            case OP_LP_END: {
+            case OP_LP_END:
                 if (vm->memory[vm->data_pointer] != 0)
                     // go to loop start
                     vm->instruction_pointer = instr.parameter;
-            }
                 break;
             default:
                 break;
@@ -230,13 +259,24 @@ int main(int argc, char **argv) {
     compile(&vm);
     execute(&vm);
 
-//    FILE *fp = fopen("filename.bin", "wb");
+//    FILE *fp = fopen("mandelbrot.bc", "w");
 //    if (fp == NULL) {
 //        printf("Failed to open file\n");
 //        return 1;
 //    }
 //
-//    fwrite(bytecode, sizeof(word), file_size, fp);
+//    char* instructions = "Z><+-.,[]";
+//    for (int i = 0; i < vm.bytecode_len; i++){
+//        int instr = bytecode[i].instruction;
+//        int parameter = bytecode[i].parameter;
+//        if (instr == OP_LP_END || instr == OP_LP_START) {
+//            fprintf(fp, "%c", instructions[instr]);
+//        }
+//        else {
+//            fprintf(fp, "%c%d", instructions[instr], parameter);
+//        }
+//        fprintf(fp, "%c, %d, %d\n", instructions[instr], instr, parameter);
+//    }
 //    fclose(fp);
 
     return 0;
